@@ -10,6 +10,8 @@ public/versions.json
 
 # Cloudflare
 .wrangler/
+# Local-only Worker configs (e.g. the elasbit-dev testbed, docs/elasbit-dev-worker.md)
+wrangler.*.local.toml
 
 # Local secrets (NEVER commit)
 .dev.vars
