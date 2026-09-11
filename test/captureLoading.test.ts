@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const successfulCapture = 'data:image/png;base64,AAAA';
+const successfulCapture = {
+  dataUrl: 'data:image/png;base64,AAAA',
+  redaction: {
+    count: 0,
+    hasLimitations: false,
+    maskedSelectors: [],
+    unsupportedSurfaces: [],
+  },
+};
 
 function trackLoadingAppend(root: HTMLElement, events: string[]) {
   const appendChild = root.appendChild.bind(root);

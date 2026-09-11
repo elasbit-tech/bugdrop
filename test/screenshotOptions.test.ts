@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const screenshotMocks = vi.hoisted(() => ({
   beginViewportCapture: vi.fn<() => Promise<string>>(),
   canCaptureViewportNatively: vi.fn(),
+  getRedactionCount: vi.fn(),
   isFullPageDisabled: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ async function choose(action: string, opts?: { allowSkip?: boolean }) {
 beforeEach(() => {
   screenshotMocks.isFullPageDisabled.mockReturnValue(false);
   screenshotMocks.canCaptureViewportNatively.mockReturnValue(false);
+  screenshotMocks.getRedactionCount.mockReturnValue(0);
   screenshotMocks.beginViewportCapture.mockResolvedValue('viewport-image');
   window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof matchMedia;
 });
@@ -56,15 +58,16 @@ describe('screenshot options', () => {
     expect(root.querySelector('.bd-overlay')).toBeNull();
   });
 
-  it('shows only the element fallback on complex pages without a redaction banner', async () => {
+  it('shows only element fallback and escaped privacy guidance on complex pages', async () => {
     screenshotMocks.isFullPageDisabled.mockReturnValue(true);
+    screenshotMocks.getRedactionCount.mockReturnValue(3);
     const root = document.createElement('div');
     document.body.append(root);
     const { showScreenshotOptions } = await import('../src/widget/screenshot-options');
     const result = showScreenshotOptions(root);
 
     expect(root.textContent).toContain('Select a specific element instead.');
-    expect(root.querySelector('.bd-redaction-note')).toBeNull();
+    expect(root.textContent).toContain('marked some fields for redaction');
     expect(root.querySelector('[data-action="capture"]')).toBeNull();
     expect(root.querySelector('[data-action="viewport"]')).toBeNull();
     expect(root.querySelector('[data-action="area"]')).toBeNull();
@@ -85,7 +88,7 @@ describe('screenshot options', () => {
     const { showScreenshotOptions } = await import('../src/widget/screenshot-options');
     const result = showScreenshotOptions(root);
 
-    expect(root.querySelector('.bd-redaction-note')).toBeNull();
+    expect(root.textContent).toContain('cannot apply automatic private-field masks');
     root.querySelector<HTMLElement>('[data-action="viewport"]')?.click();
     expect(screenshotMocks.beginViewportCapture).toHaveBeenCalledTimes(1);
     const choice = await result;

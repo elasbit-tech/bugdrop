@@ -46,7 +46,7 @@ That's it! Users can now click the bug button to submit feedback as GitHub Issue
 
 ## Features
 
-- 🔒 **Manual redaction** — the screenshot review step has a Redact tool so reporters black out sensitive regions before submission. BugDrop never masks page content automatically.
+- 🔒 **Privacy masking** — tag sensitive elements with `data-bugdrop-mask` and BugDrop visually covers them in supported screenshot modes before submission. Passwords and credit-card inputs are masked automatically.
 
 ## Widget Options
 

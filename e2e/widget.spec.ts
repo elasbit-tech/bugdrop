@@ -3838,7 +3838,7 @@ test.describe('Screenshot Crash Prevention (#67)', () => {
     }`;
   }
 
-  function blankCanvasPng() {
+  function redactionAwarePng() {
     return `function(el, opts) {
       window.__captureOpts = opts;
       var canvas = document.createElement('canvas');
@@ -5015,6 +5015,39 @@ test.describe('Screenshot Crash Prevention (#67)', () => {
     await expect(errorText).not.toHaveText(/Failed to capture screenshot/, { timeout: 3000 });
   });
 
+  test('privacy masking failure shows a dedicated modal and submits without a screenshot', async ({
+    page,
+  }) => {
+    const payloads = await trackFeedbackPayloads(page);
+    // toPng resolves with a data URL that fails Image.onload, so applyMaskToImage
+    // rejects with MaskApplicationError. Use /test/redaction.html so the page has
+    // a [data-bugdrop-redact] element — otherwise applyMaskToImage early-returns
+    // when rects.length === 0 and the failure path never fires.
+    await mockHtmlToImage(
+      page,
+      "function() { return Promise.resolve('data:image/png;base64,not-a-real-image'); }"
+    );
+    await page.goto('/test/redaction.html');
+    await navigateToFullPageCapture(page);
+
+    const host = page.locator('#bugdrop-host');
+    const modalTitle = host.locator('css=.bd-title');
+    await expect(modalTitle).toHaveText('Privacy masking failed', { timeout: 5000 });
+
+    await expect(host.locator('css=.bd-error-message__text')).toContainText(
+      'Automatic redaction of private fields could not be applied'
+    );
+    // Retry must NOT be offered for masking failures — retrying would fail the
+    // same way and a user might be tempted to send unredacted output.
+    await expect(host.locator('css=[data-action="retry"]')).not.toBeAttached();
+
+    await host.locator('css=[data-action="skip"]').click();
+
+    await expect(host.locator('css=.bd-success-icon')).toBeVisible({ timeout: 5000 });
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].screenshot).toBeNull();
+  });
+
   test('capture failure can return to screenshot options and select another method', async ({
     page,
   }) => {
@@ -5164,13 +5197,20 @@ test.describe('Screenshot Crash Prevention (#67)', () => {
     await expect(host.locator('css=[data-action="capture"]')).not.toBeAttached();
     await expect(host.locator('css=[data-action="area"]')).not.toBeAttached();
     await expect(host.locator('css=p >> text=visible viewport')).toBeVisible();
-    await expect(host.locator('css=.bd-redaction-note')).not.toBeAttached();
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      'Browser viewport capture cannot apply automatic private-field masks'
+    );
 
     await viewportBtn.click();
 
     await expect(host.locator('css=.bd-modal--annotator')).toBeVisible({ timeout: 10000 });
     await expect(host.locator('css=#annotation-canvas canvas')).toBeVisible();
-    await expect(host.locator('css=.bd-redaction-note')).not.toBeAttached();
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      'could not apply automatic private-field masks'
+    );
+    await expect(host.locator('css=.bd-redaction-note')).not.toContainText(
+      'private item was marked for redaction'
+    );
     await expect
       .poll(() =>
         page.evaluate(
@@ -5523,36 +5563,35 @@ test.describe('Screenshot Crash Prevention (#67)', () => {
     await expect(host.locator('css=p >> text=too complex')).not.toBeAttached();
   });
 
-  test('full-page capture on a page with marked fields shows no redaction banner', async ({
-    page,
-  }) => {
-    await mockHtmlToImage(page, blankCanvasPng());
+  test('communicates developer redactions for full-page screenshots', async ({ page }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
     await page.goto('/test/redaction.html');
 
     const host = await navigateToScreenshotOptions(page);
-    await expect(host.locator('css=.bd-redaction-note')).not.toBeAttached();
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      'marked some fields for redaction'
+    );
 
     await host.locator('css=[data-action="capture"]').click();
 
     await expect(host.locator('css=#annotation-canvas')).toBeVisible({ timeout: 10000 });
-    await expect(host.locator('css=.bd-redaction-note')).not.toBeAttached();
-    await expect(host.locator('css=[data-tool="redact"]')).toBeVisible();
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      '1 private item was marked for redaction'
+    );
     await expect(page.locator('#redacted-test-input')).toHaveValue('sk_live_local_test_secret');
   });
 
-  test('selected-area capture on a page with marked fields shows the plain instruction', async ({
-    page,
-  }) => {
-    await mockHtmlToImage(page, blankCanvasPng());
+  test('communicates developer redactions for selected-area screenshots', async ({ page }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
     await page.goto('/test/redaction.html');
     await page.locator('#redacted-test-input').scrollIntoViewIfNeeded();
 
     const host = await navigateToScreenshotOptions(page);
     await host.locator('css=[data-action="area"]').click();
     await expect(page.locator('#bugdrop-area-picker-overlay')).toBeVisible({ timeout: 5000 });
-    const tooltip = page.locator('#bugdrop-area-picker-tooltip');
-    await expect(tooltip).toContainText('Draw a selection around the area to capture');
-    await expect(tooltip).not.toContainText('masked');
+    await expect(page.locator('#bugdrop-area-picker-tooltip')).toContainText(
+      'Marked private fields may be masked if included'
+    );
 
     const box = await page.locator('#redacted-test-input').boundingBox();
     expect(box).toBeTruthy();
@@ -5563,7 +5602,9 @@ test.describe('Screenshot Crash Prevention (#67)', () => {
     await page.mouse.up();
 
     await expect(host.locator('css=#annotation-canvas')).toBeVisible({ timeout: 10000 });
-    await expect(host.locator('css=.bd-redaction-note')).not.toBeAttached();
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      '1 private item was marked for redaction'
+    );
 
     const captureOpts = await page.evaluate(
       () =>
@@ -6186,7 +6227,9 @@ test.describe('Screenshot Mode Configuration', () => {
     await expect(host.locator('css=form')).toContainText(
       'This site will attach a full-page screenshot when you submit'
     );
-    await expect(host.locator('css=form')).not.toContainText('masked');
+    await expect(host.locator('css=form')).toContainText(
+      'unmarked sensitive information can still be included'
+    );
   });
 
   test('auto mode skips full-page capture on very complex pages', async ({ page }) => {
@@ -6287,7 +6330,7 @@ test.describe('Screenshot Mode Configuration', () => {
   });
 });
 
-test.describe('Screenshot capture without automatic masking', () => {
+test.describe('Screenshot Masking', () => {
   // Sample a single pixel from a base64 PNG payload via a page-side canvas.
   async function pixelAt(
     page: Page,
@@ -6334,6 +6377,20 @@ test.describe('Screenshot capture without automatic masking', () => {
     }, selector);
   }
 
+  async function shadowDocRectOf(page: Page, hostSelector: string, shadowSelector: string) {
+    return page.locator(hostSelector).evaluate((host, selector) => {
+      const el = host.shadowRoot?.querySelector(selector);
+      if (!el) throw new Error(`no shadow element matches ${selector}`);
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.left + window.scrollX,
+        y: r.top + window.scrollY,
+        w: r.width,
+        h: r.height,
+      };
+    }, shadowSelector);
+  }
+
   async function imagePixelRatio(page: Page, dataUrl: string): Promise<number> {
     return page.evaluate(
       url =>
@@ -6348,6 +6405,23 @@ test.describe('Screenshot capture without automatic masking', () => {
         }),
       dataUrl
     );
+  }
+
+  function mockHtmlToImage(page: Page, toPngBody: string) {
+    return page.addInitScript(`window.__bugdropMockToPng = ${toPngBody};`);
+  }
+
+  function redactionAwarePng() {
+    return `function(el, opts) {
+      var canvas = document.createElement('canvas');
+      var pixelRatio = opts && opts.pixelRatio ? opts.pixelRatio : 1;
+      canvas.width = Math.max(1, Math.ceil((opts && opts.width ? opts.width : document.documentElement.scrollWidth) * pixelRatio));
+      canvas.height = Math.max(1, Math.ceil((opts && opts.height ? opts.height : document.documentElement.scrollHeight) * pixelRatio));
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      return Promise.resolve(canvas.toDataURL('image/png'));
+    }`;
   }
 
   async function mockInstalledCheck(page: Page): Promise<void> {
@@ -6416,6 +6490,497 @@ test.describe('Screenshot capture without automatic masking', () => {
     const pr = await imagePixelRatio(page, screenshotDataUrl);
     return { screenshot: screenshotDataUrl, pixelRatio: pr };
   }
+
+  test('masks input[type=password] by default', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-basic.html'
+    );
+
+    const rect = await docRectOf(page, '#password');
+    const cx = Math.floor((rect.x + rect.w / 2) * pixelRatio);
+    const cy = Math.floor((rect.y + rect.h / 2) * pixelRatio);
+
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('masks elements tagged with data-bugdrop-mask', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-basic.html'
+    );
+
+    const rect = await docRectOf(page, '#customer-panel');
+    const cx = Math.floor((rect.x + rect.w / 2) * pixelRatio);
+    const cy = Math.floor((rect.y + rect.h / 2) * pixelRatio);
+
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('masks elements tagged with data-bugdrop-redact', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/redaction.html'
+    );
+
+    const rect = await docRectOf(page, '#redacted-test-input');
+    const cx = Math.floor((rect.x + rect.w / 2) * pixelRatio);
+    const cy = Math.floor((rect.y + rect.h / 2) * pixelRatio);
+
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('does not mask unrelated elements', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-basic.html'
+    );
+
+    // Sample inside the panel's padding (top-left, ~3-4px in) where the yellow
+    // background is guaranteed to be rendered without overlapping text. Sampling
+    // the geometric center can land on anti-aliased glyph pixels in headless CI
+    // and produce a spurious [0,0,0,255] match.
+    const rect = await docRectOf(page, '#public-note');
+    const sx = Math.floor((rect.x + 4) * pixelRatio);
+    const sy = Math.floor((rect.y + 4) * pixelRatio);
+    expect(await pixelAt(page, screenshot, sx, sy)).not.toEqual([0, 0, 0, 255]);
+  });
+
+  test('parent mask covers all descendants (inheritance)', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-nested.html'
+    );
+
+    // Sample inside the deeply-nested .inner-masked element — the OUTER mask
+    // should already cover it, so this pixel must be opaque black.
+    const innerRect = await docRectOf(page, '.inner-masked');
+    const ix = Math.floor((innerRect.x + innerRect.w / 2) * pixelRatio);
+    const iy = Math.floor((innerRect.y + innerRect.h / 2) * pixelRatio);
+    expect(await pixelAt(page, screenshot, ix, iy)).toEqual([0, 0, 0, 255]);
+
+    // Sibling area inside the masked outer container should also be covered.
+    // Sample 5px below the outer top edge — still inside the mask but outside
+    // any nested element.
+    const outerRect = await docRectOf(page, '#outer-masked');
+    const ox = Math.floor((outerRect.x + 10) * pixelRatio);
+    const oy = Math.floor((outerRect.y + 5) * pixelRatio);
+    expect(await pixelAt(page, screenshot, ox, oy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('masked child of unmasked parent is masked; siblings are not', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-nested.html'
+    );
+
+    const child = await docRectOf(page, '#masked-child');
+    const cx = Math.floor((child.x + child.w / 2) * pixelRatio);
+    const cy = Math.floor((child.y + child.h / 2) * pixelRatio);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+
+    // The sibling is a <p> with no padding, so any pixel inside its rect could
+    // overlap rendered glyphs and produce a spurious solid-black sample on
+    // anti-aliased headless rendering. A real mask would make EVERY pixel inside
+    // the rect solid black; sampling four corners and asserting at least one is
+    // non-black is sufficient to disprove masking and is robust to text
+    // rendering differences across environments.
+    const sibling = await docRectOf(page, '#visible-sibling');
+    const corners: Array<[number, number]> = [
+      [sibling.x + 1, sibling.y + 1],
+      [sibling.x + sibling.w - 2, sibling.y + 1],
+      [sibling.x + 1, sibling.y + sibling.h - 2],
+      [sibling.x + sibling.w - 2, sibling.y + sibling.h - 2],
+    ];
+    const samples = await Promise.all(
+      corners.map(([x, y]) =>
+        pixelAt(page, screenshot, Math.floor(x * pixelRatio), Math.floor(y * pixelRatio))
+      )
+    );
+    const anyNonBlack = samples.some(px => !(px[0] === 0 && px[1] === 0 && px[2] === 0));
+    expect(anyNonBlack).toBe(true);
+  });
+
+  test('scrolled full-page capture masks an element below the initial viewport', async ({
+    page,
+  }) => {
+    // A scrolled variant of the helper — same flow, but scrolls AFTER goto so the page is
+    // captured while the user is offset from the top.
+    let payload: Record<string, unknown> | null = null;
+    await page.route('**/api/check**', async route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ installed: true }),
+      })
+    );
+    await page.route('**/feedback', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, issueNumber: 1, issueUrl: '#', isPublic: false }),
+      });
+    });
+
+    // Inject a tall spacer + a masked target below the fold AT page load.
+    await page.addInitScript(() => {
+      window.addEventListener('DOMContentLoaded', () => {
+        const spacer = document.createElement('div');
+        spacer.style.height = '2000px';
+        spacer.id = 'spacer';
+        const target = document.createElement('div');
+        target.id = 'below-fold-mask';
+        target.setAttribute('data-bugdrop-mask', '');
+        target.style.cssText = 'width: 200px; height: 100px; background: #ccc;';
+        target.textContent = 'sensitive';
+        document.body.append(spacer, target);
+      });
+    });
+
+    await page.goto('/test/masking-basic.html');
+    await page.evaluate(() => window.scrollTo(0, 1500));
+
+    const host = page.locator('#bugdrop-host');
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Scroll mask');
+    // Note: in optional mode, the include-screenshot checkbox must be checked.
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+    await host.locator('css=[data-action="capture"]').click();
+    await expect(host.locator('css=#annotation-canvas')).toBeVisible({ timeout: 30000 });
+    await host.locator('css=[data-action="done"]').click();
+    await expect(host.locator('css=.bd-success-icon')).toBeVisible({ timeout: 10000 });
+
+    if (!payload) throw new Error('no payload');
+
+    const screenshot = payload.screenshot as string;
+    // Infer pixelRatio the same way the existing helper does (full-page capture):
+    // naturalWidth / window.innerWidth.
+    const pr = await page.evaluate(
+      dataUrl =>
+        new Promise<number>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img.naturalWidth / window.innerWidth);
+          img.onerror = () => reject(new Error('image load failed'));
+          img.src = dataUrl;
+        }),
+      screenshot
+    );
+
+    const rect = await docRectOf(page, '#below-fold-mask');
+    const cx = Math.floor((rect.x + rect.w / 2) * pr);
+    const cy = Math.floor((rect.y + rect.h / 2) * pr);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('full-page capture masks transformed redaction targets', async ({ page }) => {
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-layout-edge.html'
+    );
+
+    const rect = await docRectOf(page, '#transformed-mask');
+    const cx = Math.floor((rect.x + rect.w / 2) * pixelRatio);
+    const cy = Math.floor((rect.y + rect.h / 2) * pixelRatio);
+
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('full-page capture masks sticky redaction targets after scrolling', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.addEventListener('DOMContentLoaded', () => {
+        requestAnimationFrame(() => window.scrollTo(0, 420));
+      });
+    });
+
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-layout-edge.html'
+    );
+
+    const rect = await docRectOf(page, '#sticky-mask');
+    const cx = Math.floor((rect.x + rect.w / 2) * pixelRatio);
+    const cy = Math.floor((rect.y + rect.h / 2) * pixelRatio);
+
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('full-page capture masks fixed redaction targets after scrolling', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.addEventListener('DOMContentLoaded', () => {
+        requestAnimationFrame(() => window.scrollTo(0, 420));
+      });
+    });
+
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-layout-edge.html'
+    );
+
+    const rect = await docRectOf(page, '#fixed-mask');
+    const cx = Math.floor((rect.x + rect.w / 2) * pixelRatio);
+    const cy = Math.floor((rect.y + rect.h / 2) * pixelRatio);
+
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('masks explicit elements inside open shadow DOM', async ({ page }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-edge-surfaces.html'
+    );
+
+    const rect = await shadowDocRectOf(page, '#open-shadow-host', '#shadow-secret');
+
+    expect(
+      await pixelAt(
+        page,
+        screenshot,
+        Math.floor((rect.x + rect.w / 2) * pixelRatio),
+        Math.floor((rect.y + rect.h / 2) * pixelRatio)
+      )
+    ).toEqual([0, 0, 0, 255]);
+  });
+
+  test('masks a closed shadow custom element when the host is marked', async ({ page }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/masking-edge-surfaces.html'
+    );
+
+    const rect = await docRectOf(page, '#closed-shadow-host');
+    expect(
+      await pixelAt(
+        page,
+        screenshot,
+        Math.floor((rect.x + rect.w / 2) * pixelRatio),
+        Math.floor((rect.y + rect.h / 2) * pixelRatio)
+      )
+    ).toEqual([0, 0, 0, 255]);
+  });
+
+  test('warns when marked unsupported surfaces are covered by their element boxes', async ({
+    page,
+  }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
+    await mockInstalledCheck(page);
+    await page.goto('/test/masking-edge-surfaces.html');
+    const host = page.locator('#bugdrop-host');
+
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Surface warning');
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+    await host.locator('css=[data-action="capture"]').click();
+
+    const note = host.locator('css=.bd-redaction-note');
+    await expect(note).toContainText('private');
+    await expect(note).toContainText('BugDrop only covered the measured marked boxes');
+
+    const canvasRect = await docRectOf(page, '#secret-canvas');
+    const canvas = host.locator('css=#annotation-canvas canvas');
+    const dataUrl = await canvas.evaluate(el => (el as HTMLCanvasElement).toDataURL('image/png'));
+    const pixelRatio = await imagePixelRatio(page, dataUrl);
+    expect(
+      await pixelAt(
+        page,
+        dataUrl,
+        Math.floor((canvasRect.x + canvasRect.w / 2) * pixelRatio),
+        Math.floor((canvasRect.y + canvasRect.h / 2) * pixelRatio)
+      )
+    ).toEqual([0, 0, 0, 255]);
+  });
+
+  test('warns when a marked wrapper contains unsupported pixel-rendered descendants', async ({
+    page,
+  }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
+    await mockInstalledCheck(page);
+    await page.goto('/test/masking-edge-surfaces.html?fixture=wrapper-only');
+    const host = page.locator('#bugdrop-host');
+
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Wrapper warning');
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+    await host.locator('css=[data-action="capture"]').click();
+
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      'BugDrop only covered the measured marked boxes',
+      { timeout: 30000 }
+    );
+
+    const wrappedRect = await docRectOf(page, '#wrapped-secret-canvas');
+    const canvas = host.locator('css=#annotation-canvas canvas');
+    const dataUrl = await canvas.evaluate(el => (el as HTMLCanvasElement).toDataURL('image/png'));
+    const pixelRatio = await imagePixelRatio(page, dataUrl);
+    expect(
+      await pixelAt(
+        page,
+        dataUrl,
+        Math.floor((wrappedRect.x + wrappedRect.w / 2) * pixelRatio),
+        Math.floor((wrappedRect.y + wrappedRect.h / 2) * pixelRatio)
+      )
+    ).toEqual([0, 0, 0, 255]);
+  });
+
+  test('selected-area capture warns only for unsupported marked surfaces inside the crop', async ({
+    page,
+  }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
+    await mockInstalledCheck(page);
+    await page.goto('/test/masking-edge-surfaces.html');
+    const host = page.locator('#bugdrop-host');
+
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Area includes unsupported surface');
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+    await host.locator('css=[data-action="area"]').click();
+    await expect(page.locator('#bugdrop-area-picker-overlay')).toBeVisible();
+
+    const box = await page.locator('#secret-canvas').boundingBox();
+    if (!box) throw new Error('secret canvas not found');
+    await page.mouse.move(box.x - 8, box.y - 8);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width + 8, box.y + box.height + 8);
+    await page.mouse.up();
+
+    await expect(host.locator('css=.bd-redaction-note')).toContainText(
+      'BugDrop only covered the measured marked boxes',
+      { timeout: 30000 }
+    );
+  });
+
+  test('selected-area capture does not warn for unsupported surfaces outside the crop', async ({
+    page,
+  }) => {
+    await mockHtmlToImage(page, redactionAwarePng());
+    await mockInstalledCheck(page);
+    await page.goto('/test/masking-edge-surfaces.html');
+    const host = page.locator('#bugdrop-host');
+
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Area excludes unsupported surface');
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+    await host.locator('css=[data-action="area"]').click();
+    await expect(page.locator('#bugdrop-area-picker-overlay')).toBeVisible();
+
+    const box = await page.locator('#custom-control').boundingBox();
+    if (!box) throw new Error('custom control not found');
+    await page.mouse.move(box.x - 8, box.y - 8);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width + 8, box.y + box.height + 8);
+    await page.mouse.up();
+
+    await expect(host.locator('css=#annotation-canvas')).toBeVisible({ timeout: 30000 });
+    await expect(host.locator('css=.bd-redaction-note')).not.toContainText(
+      'BugDrop only covered the measured marked boxes',
+      { timeout: 30000 }
+    );
+  });
+
+  test('auto mode applies developer masks to the submitted screenshot', async ({ page }) => {
+    let payload: Record<string, unknown> | null = null;
+    await page.route('**/api/check**', async route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ installed: true }),
+      })
+    );
+    await page.route('**/feedback', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, issueNumber: 1, issueUrl: '#', isPublic: false }),
+      });
+    });
+
+    await page.goto('/test/redaction.html?screenshot=auto');
+    const host = page.locator('#bugdrop-host');
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Auto masked screenshot');
+    await host.locator('css=#submit-btn').click();
+    await expect(host.locator('css=.bd-success-icon')).toBeVisible({ timeout: 30000 });
+
+    if (!payload?.screenshot || typeof payload.screenshot !== 'string') {
+      throw new Error('expected screenshot payload');
+    }
+
+    const rect = await docRectOf(page, '#redacted-test-input');
+    const pixelRatio = await imagePixelRatio(page, payload.screenshot);
+    expect(
+      await pixelAt(
+        page,
+        payload.screenshot,
+        Math.floor((rect.x + rect.w / 2) * pixelRatio),
+        Math.floor((rect.y + rect.h / 2) * pixelRatio)
+      )
+    ).toEqual([0, 0, 0, 255]);
+  });
+
+  test('full-page capture uses capture-start redaction geometry after DOM mutation', async ({
+    page,
+  }) => {
+    await mockHtmlToImage(
+      page,
+      `function(el, opts) {
+        window.__mutationCaptureRect = (function() {
+          var target = document.querySelector('[data-bugdrop-redact]');
+          var rect = target.getBoundingClientRect();
+          return {
+            x: rect.left + window.scrollX,
+            y: rect.top + window.scrollY,
+            w: rect.width,
+            h: rect.height
+          };
+        })();
+        document.querySelector('[data-bugdrop-redact]').remove();
+        var canvas = document.createElement('canvas');
+        var pixelRatio = opts && opts.pixelRatio ? opts.pixelRatio : 1;
+        canvas.width = Math.ceil(document.documentElement.scrollWidth * pixelRatio);
+        canvas.height = Math.ceil(document.documentElement.scrollHeight * pixelRatio);
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return Promise.resolve(canvas.toDataURL('image/png'));
+      }`
+    );
+
+    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
+      page,
+      '/test/redaction.html'
+    );
+    const originalRect = await page.evaluate(
+      () =>
+        (
+          window as Window & {
+            __mutationCaptureRect: { x: number; y: number; w: number; h: number };
+          }
+        ).__mutationCaptureRect
+    );
+
+    expect(
+      await pixelAt(
+        page,
+        screenshot,
+        Math.floor((originalRect.x + originalRect.w / 2) * pixelRatio),
+        Math.floor((originalRect.y + originalRect.h / 2) * pixelRatio)
+      )
+    ).toEqual([0, 0, 0, 255]);
+  });
 
   // Walk the element-picker flow and capture the chosen element.
   //
@@ -6520,113 +7085,6 @@ test.describe('Screenshot capture without automatic masking', () => {
     };
   }
 
-  // Fraction of opaque near-black pixels inside a document-coordinate rect of the screenshot.
-  // Automatic masking painted marked boxes solid black (ratio 1); text on a light background
-  // stays far below 0.5.
-  async function blackPixelRatioInRect(
-    page: Page,
-    dataUrl: string,
-    rect: { x: number; y: number; w: number; h: number },
-    pixelRatio: number
-  ): Promise<number> {
-    return page.evaluate(
-      ({ dataUrl, rect, pixelRatio }) =>
-        new Promise<number>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            const c = document.createElement('canvas');
-            c.width = img.naturalWidth;
-            c.height = img.naturalHeight;
-            const ctx = c.getContext('2d');
-            if (!ctx) {
-              reject(new Error('no ctx'));
-              return;
-            }
-            ctx.drawImage(img, 0, 0);
-            const x = Math.floor(rect.x * pixelRatio);
-            const y = Math.floor(rect.y * pixelRatio);
-            const w = Math.max(1, Math.floor(rect.w * pixelRatio));
-            const h = Math.max(1, Math.floor(rect.h * pixelRatio));
-            const { data } = ctx.getImageData(x, y, w, h);
-            let black = 0;
-            for (let i = 0; i < data.length; i += 4) {
-              if (data[i + 3] > 200 && data[i] < 20 && data[i + 1] < 20 && data[i + 2] < 20) {
-                black++;
-              }
-            }
-            resolve(black / (w * h));
-          };
-          img.onerror = () => reject(new Error('image load failed'));
-          img.src = dataUrl;
-        }),
-      { dataUrl, rect, pixelRatio }
-    );
-  }
-
-  test('full-page capture leaves password inputs and data-bugdrop-mask panels visible (issue #1)', async ({
-    page,
-  }) => {
-    const { screenshot, pixelRatio } = await submitFeedbackWithFullPageCapture(
-      page,
-      '/test/masking-basic.html'
-    );
-
-    for (const selector of ['#password', '#customer-panel', '#public-note']) {
-      const rect = await docRectOf(page, selector);
-      const ratio = await blackPixelRatioInRect(page, screenshot, rect, pixelRatio);
-      expect(ratio, `${selector} must not be blacked out`).toBeLessThan(0.5);
-    }
-  });
-
-  test('element capture leaves a picked data-bugdrop-mask panel visible (issue #1)', async ({
-    page,
-  }) => {
-    const { screenshot, imageSize } = await submitFeedbackWithElementCapture(
-      page,
-      '/test/masking-basic.html',
-      '#customer-panel'
-    );
-
-    const ratio = await blackPixelRatioInRect(
-      page,
-      screenshot,
-      { x: 0, y: 0, w: imageSize.w, h: imageSize.h },
-      1
-    );
-    expect(ratio).toBeLessThan(0.5);
-  });
-
-  test('auto mode uploads marked fields without masking them (issue #1)', async ({ page }) => {
-    let payload: Record<string, unknown> | null = null;
-    await mockInstalledCheck(page);
-    await page.route('**/feedback', async route => {
-      payload = route.request().postDataJSON();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, issueNumber: 1, issueUrl: '#', isPublic: false }),
-      });
-    });
-
-    await page.goto('/test/redaction.html?screenshot=auto');
-    const host = page.locator('#bugdrop-host');
-    await host.locator('css=.bd-trigger').click();
-    await host.locator('css=[data-action="continue"]').click();
-    await host.locator('css=#title').fill('Auto unmasked screenshot');
-    await host.locator('css=#submit-btn').click();
-    await expect(host.locator('css=.bd-success-icon')).toBeVisible({ timeout: 30000 });
-
-    if (!payload?.screenshot || typeof payload.screenshot !== 'string') {
-      throw new Error('expected screenshot payload');
-    }
-
-    const rect = await docRectOf(page, '#redacted-test-input');
-    const pixelRatio = await imagePixelRatio(page, payload.screenshot);
-    expect(await blackPixelRatioInRect(page, payload.screenshot, rect, pixelRatio)).toBeLessThan(
-      0.5
-    );
-  });
-
   test('successful element capture submits a queryable full CSS path for dynamic repeated DOM', async ({
     page,
   }) => {
@@ -6683,6 +7141,247 @@ test.describe('Screenshot capture without automatic masking', () => {
         return Boolean(selector) && document.querySelector(selector) === target;
       }, metadata.fullElementSelector)
     ).toBe(true);
+  });
+
+  test('element-scoped capture masks descendant inside picked element', async ({ page }) => {
+    // Click inside the top padding of #unmasked-parent (above the first <p> child)
+    // so the picker resolves the parent, not a child element.
+    // The 16px top padding gives ~8px of safe click area before the first child.
+    const { screenshot, imageSize, metadata } = await submitFeedbackWithElementCapture(
+      page,
+      '/test/masking-nested.html',
+      '#unmasked-parent',
+      { x: 40, y: 8 } // 8px from top = within the 16px top padding
+    );
+    expect(metadata.elementSelector).toBe('#unmasked-parent');
+    expect(metadata.fullElementSelector).toContain('html > body');
+    expect(metadata.fullElementSelector).toContain('div#unmasked-parent');
+    await expect(page.locator(`css=${metadata.fullElementSelector}`)).toHaveAttribute(
+      'id',
+      'unmasked-parent'
+    );
+
+    // Measure child geometry relative to the parent using the image's own scale.
+    // The image width / parent clientWidth gives the pixelRatio used by html-to-image.
+    const geometry = await page.evaluate(() => {
+      const parent = document.querySelector('#unmasked-parent') as HTMLElement;
+      const child = document.querySelector('#masked-child') as HTMLElement;
+      const p = parent.getBoundingClientRect();
+      const c = child.getBoundingClientRect();
+      return {
+        parentClientW: parent.clientWidth,
+        childRelX: c.left - p.left,
+        childRelY: c.top - p.top,
+        childW: c.width,
+        childH: c.height,
+      };
+    });
+
+    const pr = imageSize.w / geometry.parentClientW;
+    const cx = Math.floor((geometry.childRelX + geometry.childW / 2) * pr);
+    const cy = Math.floor((geometry.childRelY + geometry.childH / 2) * pr);
+
+    // Sanity check: the child must fall within the captured image height.
+    expect(cy).toBeLessThan(imageSize.h);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('element-scoped capture masks the picked element itself', async ({ page }) => {
+    const { screenshot, imageSize } = await submitFeedbackWithElementCapture(
+      page,
+      '/test/masking-nested.html',
+      '#outer-masked'
+    );
+
+    // The mask covers the entire captured image (root element is masked).
+    // Use the image center — guaranteed in-bounds regardless of pixelRatio.
+    const cx = Math.floor(imageSize.w / 2);
+    const cy = Math.floor(imageSize.h / 2);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('element-scoped capture masks a picked password input', async ({ page }) => {
+    const { screenshot, imageSize } = await submitFeedbackWithElementCapture(
+      page,
+      '/test/masking-basic.html',
+      '#password'
+    );
+
+    // The mask covers the entire captured image (password input is masked at root).
+    const cx = Math.floor(imageSize.w / 2);
+    const cy = Math.floor(imageSize.h / 2);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('area-cropped capture preserves masks inside the selected region', async ({ page }) => {
+    let payload: Record<string, unknown> | null = null;
+    await page.route('**/api/check**', async route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ installed: true }),
+      })
+    );
+    await page.route('**/feedback', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, issueNumber: 1, issueUrl: '#', isPublic: false }),
+      });
+    });
+
+    await page.goto('/test/masking-basic.html');
+    const host = page.locator('#bugdrop-host');
+
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Area test');
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+
+    // Read the customer-panel's viewport (client) rect BEFORE clicking "Select Area",
+    // because the area picker overlay needs client coordinates (clientX/clientY).
+    const clientRect = await page.evaluate(() => {
+      const el = document.querySelector('#customer-panel');
+      if (!el) throw new Error('no #customer-panel');
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    });
+    const startX = clientRect.x - 10;
+    const startY = clientRect.y - 10;
+    const endX = clientRect.x + clientRect.w + 10;
+    const endY = clientRect.y + clientRect.h + 10;
+    const cropW = endX - startX;
+    const cropH = endY - startY;
+
+    await host.locator('css=[data-action="area"]').click();
+
+    // Wait for the area picker overlay to appear (createAreaPicker has a 50ms delay).
+    await expect(page.locator('#bugdrop-area-picker-overlay')).toBeVisible({ timeout: 5000 });
+
+    // Drag a rectangle around the customer panel on the overlay.
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(50);
+    await page.mouse.move(endX, endY, { steps: 5 });
+    await page.mouse.up();
+
+    await expect(host.locator('css=#annotation-canvas')).toBeVisible({ timeout: 30000 });
+    await host.locator('css=[data-action="done"]').click();
+    await expect(host.locator('css=.bd-success-icon')).toBeVisible({ timeout: 10000 });
+
+    if (!payload) throw new Error('no payload');
+
+    // Infer pixelRatio from the cropped image. Cropped image width = cropW * pixelRatio.
+    const screenshot = payload.screenshot as string;
+    const pr = await page.evaluate(
+      ({ dataUrl, w }) =>
+        new Promise<number>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img.naturalWidth / w);
+          img.onerror = () => reject(new Error('image load failed'));
+          img.src = dataUrl;
+        }),
+      { dataUrl: screenshot, w: cropW }
+    );
+
+    // The cropped image's geometric center should land inside the masked panel.
+    const cx = Math.floor((cropW / 2) * pr);
+    const cy = Math.floor((cropH / 2) * pr);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
+  });
+
+  test('scrolled area-cropped capture preserves masks at translated crop-local coordinates', async ({
+    page,
+  }) => {
+    // Inject a tall spacer + a masked target below the fold.
+    await page.addInitScript(() => {
+      window.addEventListener('DOMContentLoaded', () => {
+        const spacer = document.createElement('div');
+        spacer.style.height = '2000px';
+        const target = document.createElement('div');
+        target.id = 'scrolled-mask';
+        target.setAttribute('data-bugdrop-mask', '');
+        target.style.cssText = 'width: 200px; height: 100px; background: #ccc;';
+        target.textContent = 'sensitive';
+        document.body.append(spacer, target);
+      });
+    });
+
+    let payload: Record<string, unknown> | null = null;
+    await page.route('**/api/check**', async route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ installed: true }),
+      })
+    );
+    await page.route('**/feedback', async route => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, issueNumber: 1, issueUrl: '#', isPublic: false }),
+      });
+    });
+
+    await page.goto('/test/masking-basic.html');
+    await page.evaluate(() => window.scrollTo(0, 1900));
+
+    const host = page.locator('#bugdrop-host');
+    await host.locator('css=.bd-trigger').click();
+    await host.locator('css=[data-action="continue"]').click();
+    await host.locator('css=#title').fill('Scrolled area test');
+    await host.locator('css=#include-screenshot').check();
+    await host.locator('css=#submit-btn').click();
+    await host.locator('css=[data-action="area"]').click();
+
+    // Wait for the area picker overlay (50ms initialization delay).
+    await expect(page.locator('#bugdrop-area-picker-overlay')).toBeVisible({ timeout: 5000 });
+
+    // Get viewport-coordinate rect of the masked element (it's now in the scrolled viewport).
+    const targetClient = await page.evaluate(() => {
+      const el = document.querySelector('#scrolled-mask') as HTMLElement;
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    });
+
+    // Drag a rectangle around the masked target. Area picker uses CLIENT (viewport) coordinates.
+    const startX = targetClient.x - 10;
+    const startY = targetClient.y - 10;
+    const endX = targetClient.x + targetClient.w + 10;
+    const endY = targetClient.y + targetClient.h + 10;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(50);
+    await page.mouse.move(endX, endY, { steps: 5 });
+    await page.mouse.up();
+
+    await expect(host.locator('css=#annotation-canvas')).toBeVisible({ timeout: 30000 });
+    await host.locator('css=[data-action="done"]').click();
+    await expect(host.locator('css=.bd-success-icon')).toBeVisible({ timeout: 10000 });
+
+    if (!payload) throw new Error('no payload');
+    const screenshot = payload.screenshot as string;
+
+    // Cropped image's geometric center should be inside the masked target.
+    const cropW = endX - startX;
+    const cropH = endY - startY;
+    const pr = await page.evaluate(
+      ({ dataUrl, w }) =>
+        new Promise<number>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img.naturalWidth / w);
+          img.onerror = () => reject(new Error('image load failed'));
+          img.src = dataUrl;
+        }),
+      { dataUrl: screenshot, w: cropW }
+    );
+    const cx = Math.floor((cropW / 2) * pr);
+    const cy = Math.floor((cropH / 2) * pr);
+    expect(await pixelAt(page, screenshot, cx, cy)).toEqual([0, 0, 0, 255]);
   });
 
   test('clean baseline: page with no masked elements has no opaque-black sample at unrelated points', async ({

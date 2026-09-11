@@ -225,7 +225,7 @@ describe('native viewport capture', () => {
   });
 });
 
-describe('captureScreenshot returns the rendered PNG without automatic masking', () => {
+describe('captureScreenshot integrates with mask pipeline', () => {
   let OriginalImage: typeof Image;
 
   beforeEach(() => {
@@ -266,7 +266,7 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
       strokeStyle: '',
     } as unknown as CanvasRenderingContext2D);
     vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
-      'data:image/png;base64,composited'
+      'data:image/png;base64,masked'
     );
   });
 
@@ -276,7 +276,7 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
     vi.restoreAllMocks();
   });
 
-  it('returns the toPng output unchanged when nothing is highlighted', async () => {
+  it('returns the toPng output unchanged when no masked elements exist', async () => {
     const STUB =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
     (window as unknown as { __bugdropMockToPng: () => Promise<string> }).__bugdropMockToPng = () =>
@@ -284,8 +284,11 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
 
     const result = await captureScreenshot();
 
-    // No highlight → the rendered PNG is returned as-is; nothing is composited over it.
-    expect(result).toBe(STUB);
+    // No masks → applyMaskToImage short-circuits and returns the input unchanged.
+    expect(result).toEqual({
+      dataUrl: STUB,
+      redaction: { count: 0, hasLimitations: false },
+    });
   });
 
   it('excludes invisible and zero-size images from DOM capture', async () => {
@@ -412,7 +415,7 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
     expect(filter(iframeHiddenBeacon as unknown as HTMLElement)).toBe(false);
   });
 
-  it('leaves a descendant marked data-bugdrop-mask untouched (issue #1)', async () => {
+  it('completes element-scoped capture when the picked element has a masked descendant', async () => {
     const target = document.createElement('section');
     target.getBoundingClientRect = () =>
       ({
@@ -452,27 +455,11 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
     (window as unknown as { __bugdropMockToPng: () => Promise<string> }).__bugdropMockToPng = () =>
       Promise.resolve(STUB);
 
-    // No automatic masking: the rendered PNG is returned as-is and nothing is painted over it.
-    // Only the manual Redact tool in the annotator covers regions.
-    const fillRect = vi.fn();
-    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue({
-      beginPath: vi.fn(),
-      closePath: vi.fn(),
-      drawImage: vi.fn(),
-      fillRect,
-      fill: vi.fn(),
-      lineTo: vi.fn(),
-      moveTo: vi.fn(),
-      quadraticCurveTo: vi.fn(),
-      stroke: vi.fn(),
-      strokeRect: vi.fn(),
-      fillStyle: '',
-      lineWidth: 0,
-      strokeStyle: '',
-    } as unknown as CanvasRenderingContext2D);
-
-    await expect(captureScreenshot(target)).resolves.toBe(STUB);
-    expect(fillRect).not.toHaveBeenCalled();
+    // applyMaskToImage must have run: only it produces the masked sentinel.
+    await expect(captureScreenshot(target)).resolves.toEqual({
+      dataUrl: 'data:image/png;base64,masked',
+      redaction: { count: 1, hasLimitations: false },
+    });
   });
 
   it('captures a context element and draws a selected descendant highlight', async () => {
@@ -537,7 +524,10 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
 
     await expect(
       captureScreenshot(context, undefined, { highlightElement: selected })
-    ).resolves.toBe('data:image/png;base64,composited');
+    ).resolves.toEqual({
+      dataUrl: 'data:image/png;base64,masked',
+      redaction: { count: 0, hasLimitations: false },
+    });
 
     expect(toPng).toHaveBeenCalledWith(context, expect.any(Object));
     expect(fill).not.toHaveBeenCalled();
@@ -588,7 +578,10 @@ describe('captureScreenshot returns the rendered PNG without automatic masking',
 
     await expect(
       captureScreenshot(selected, undefined, { highlightElement: selected })
-    ).resolves.toBe('data:image/png;base64,composited');
+    ).resolves.toEqual({
+      dataUrl: 'data:image/png;base64,masked',
+      redaction: { count: 0, hasLimitations: false },
+    });
 
     expect(toPng).toHaveBeenCalledWith(selected, expect.any(Object));
     expect(drawImage).toHaveBeenCalledWith(

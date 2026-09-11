@@ -98,6 +98,7 @@ async function loadCaptureFlowWithMocks(opts: {
   }));
   vi.doMock('../src/widget/screenshot', () => ({
     beginViewportCapture: vi.fn(),
+    getRedactionCount: vi.fn().mockReturnValue(0),
     isFullPageDisabled: vi.fn().mockReturnValue(false),
   }));
 
@@ -641,7 +642,7 @@ describe('capture flow state decisions', () => {
     expect(onComplexScreenshotSkipped).not.toHaveBeenCalled();
   });
 
-  it('hands native viewport captures to the annotation step without redaction metadata', async () => {
+  it('flags redactionUnavailable on the annotation step for native viewport captures', async () => {
     const annotationMock = vi.fn().mockResolvedValue('annotated-image');
     vi.resetModules();
     vi.doMock('../src/widget/screenshot-options', () => ({
@@ -662,6 +663,7 @@ describe('capture flow state decisions', () => {
     vi.doMock('../src/widget/annotation-flow', () => ({ showAnnotationStep: annotationMock }));
     vi.doMock('../src/widget/screenshot', () => ({
       beginViewportCapture: vi.fn(),
+      getRedactionCount: vi.fn().mockReturnValue(0),
       isFullPageDisabled: vi.fn().mockReturnValue(true),
     }));
 
@@ -679,7 +681,8 @@ describe('capture flow state decisions', () => {
     expect(annotationMock).toHaveBeenCalledWith(
       expect.any(HTMLElement),
       'data:image/png;base64,VVVV',
-      {}
+      0,
+      { redactionUnavailable: true }
     );
   });
 });

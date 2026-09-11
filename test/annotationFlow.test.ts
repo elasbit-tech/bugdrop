@@ -30,12 +30,13 @@ afterEach(() => {
 });
 
 async function openAnnotation(
-  opts?: Parameters<typeof import('../src/widget/annotation-flow').showAnnotationStep>[2]
+  redactionCount = 0,
+  opts?: Parameters<typeof import('../src/widget/annotation-flow').showAnnotationStep>[3]
 ) {
   const root = document.createElement('div');
   document.body.append(root);
   const { showAnnotationStep } = await import('../src/widget/annotation-flow');
-  const result = showAnnotationStep(root, 'data:image/png;base64,source', opts);
+  const result = showAnnotationStep(root, 'data:image/png;base64,source', redactionCount, opts);
   return { root, result };
 }
 
@@ -95,18 +96,33 @@ describe('annotation flow', () => {
     expect(root.querySelector('.bd-overlay')).toBeNull();
   });
 
-  it('renders a safe selected-element config link and no automatic redaction banner', async () => {
-    const { root, result } = await openAnnotation({ selectedElementCapture: true });
+  it('renders combined redaction guidance and a safe selected-element config link', async () => {
+    const { root, result } = await openAnnotation(2, {
+      redactionLimitations: true,
+      selectedElementCapture: true,
+    });
 
-    expect(root.querySelector('.bd-redaction-note')).toBeNull();
-    expect(root.textContent).not.toContain('marked for redaction');
+    expect(root.textContent).toContain('2 private items were marked for redaction');
+    expect(root.textContent).toContain('does not inspect pixels inside embedded');
     expect(root.textContent).toContain('Check that no sensitive information is visible');
-    expect(root.querySelector('[data-tool="redact"]')).not.toBeNull();
     const link = root.querySelector<HTMLAnchorElement>('.bd-selected-element-note a');
     expect(link?.href).toBe('https://bugdrop.dev/docs/configuration#select-element-screenshots');
     expect(link?.target).toBe('_blank');
     expect(link?.rel).toBe('noopener noreferrer');
     root.querySelector<HTMLElement>('.bd-close')?.click();
+    await result;
+  });
+
+  it('uses unavailable privacy guidance instead of count and limitation details', async () => {
+    const { root, result } = await openAnnotation(4, {
+      redactionUnavailable: true,
+      redactionLimitations: true,
+    });
+
+    expect(root.textContent).toContain('could not apply automatic private-field masks');
+    expect(root.textContent).not.toContain('4 private items');
+    expect(root.textContent).not.toContain('does not inspect pixels inside embedded');
+    root.querySelector<HTMLElement>('[data-action="retake"]')?.click();
     await result;
   });
 });

@@ -1,6 +1,14 @@
 import * as htmlToImage from 'html-to-image';
 import type { Options as HtmlToImageOptions } from 'html-to-image/lib/types';
 import { withCaptureTimeout } from './capture-timeout';
+import {
+  applyMaskToImage,
+  countMaskRects,
+  createRedactionSnapshot,
+  summarizeRedactionSnapshot,
+  type RedactionSnapshot,
+  type RedactionSummary,
+} from './mask';
 import { resolveAccentColor } from '../defaults';
 import { isBugDropOwnedNode } from './owned-roots';
 export { cropScreenshot } from './crop-screenshot';
@@ -22,6 +30,11 @@ export interface CaptureScreenshotOptions {
     borderWidth?: string;
   };
   pixelRatio?: number;
+}
+
+export interface CapturedScreenshot {
+  dataUrl: string;
+  redaction: RedactionSummary;
 }
 
 declare global {
@@ -76,7 +89,7 @@ export async function captureScreenshot(
   element?: Element,
   screenshotScale?: number,
   captureOptions: CaptureScreenshotOptions = {}
-): Promise<string> {
+): Promise<CapturedScreenshot> {
   const target = element || document.body;
   const isFullPage = !element;
   const targetRect = element ? getDocumentRect(element) : getDocumentRect(document.body);
@@ -101,18 +114,38 @@ export async function captureScreenshot(
       : {}),
   };
 
-  const dataUrl = await withCaptureTimeout(toPng(target as HTMLElement, opts));
+  const redactionSnapshot = createRedactionSnapshot(target);
+  const originOffset = element ? { x: targetRect.x, y: targetRect.y } : { x: 0, y: 0 };
 
-  if (!highlightRect) return dataUrl;
+  const capturePromise = toPng(target as HTMLElement, opts);
+  const dataUrl = await withCaptureTimeout(capturePromise);
+  const maskedDataUrl = await applyMaskToImage(
+    dataUrl,
+    redactionSnapshot.targets.map(target => target.rect),
+    pixelRatio,
+    originOffset
+  );
 
-  return applyHighlightToImage(dataUrl, highlightRect, targetRect, captureOptions.highlightStyle);
+  if (!highlightRect) {
+    return capturedScreenshot(maskedDataUrl, redactionSnapshot);
+  }
+
+  return capturedScreenshot(
+    await applyHighlightToImage(
+      maskedDataUrl,
+      highlightRect,
+      targetRect,
+      captureOptions.highlightStyle
+    ),
+    redactionSnapshot
+  );
 }
 
 export async function captureAreaScreenshot(
   rect: DOMRect,
   screenshotScale?: number,
   captureOptions: CaptureScreenshotOptions = {}
-): Promise<string> {
+): Promise<CapturedScreenshot> {
   const pixelRatio = captureOptions.pixelRatio ?? getPixelRatio(true, screenshotScale);
   const targetRect = { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
   const highlightRect =
@@ -135,11 +168,36 @@ export async function captureAreaScreenshot(
     filter: shouldIncludeCaptureNode,
   };
 
+  const redactionSnapshot = createRedactionSnapshot(document.body);
   const dataUrl = await withCaptureTimeout(toPng(document.body, opts));
+  const maskedDataUrl = await applyMaskToImage(
+    dataUrl,
+    redactionSnapshot.targets.map(target => target.rect),
+    pixelRatio,
+    {
+      x: rect.x,
+      y: rect.y,
+    }
+  );
 
-  if (!highlightRect) return dataUrl;
+  if (!highlightRect) {
+    return capturedScreenshot(maskedDataUrl, redactionSnapshot, rect);
+  }
 
-  return applyHighlightToImage(dataUrl, highlightRect, targetRect, captureOptions.highlightStyle);
+  return capturedScreenshot(
+    await applyHighlightToImage(
+      maskedDataUrl,
+      highlightRect,
+      targetRect,
+      captureOptions.highlightStyle
+    ),
+    redactionSnapshot,
+    rect
+  );
+}
+
+export function getRedactionCount(element?: Element, rect?: DOMRect): number {
+  return countMaskRects(element ?? document.body, rect);
 }
 
 function shouldIncludeCaptureNode(node: HTMLElement): boolean {
@@ -172,6 +230,17 @@ function getToPng(): typeof htmlToImage.toPng {
     return window.__bugdropMockToPng;
   }
   return htmlToImage.toPng;
+}
+
+function capturedScreenshot(
+  dataUrl: string,
+  snapshot: RedactionSnapshot,
+  area?: DOMRect
+): CapturedScreenshot {
+  return {
+    dataUrl,
+    redaction: summarizeRedactionSnapshot(snapshot, area),
+  };
 }
 
 async function applyHighlightToImage(

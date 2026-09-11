@@ -37,6 +37,8 @@ export const nl: WidgetStrings = {
   descriptionPlaceholder: 'Geef extra details, stappen om het te reproduceren of context...',
   screenshotAutoNote:
     'Deze site voegt bij het versturen automatisch een schermafbeelding van de volledige pagina toe, zonder voorbeeld. Controleer uw pagina op gevoelige informatie voordat u verstuurt.',
+  screenshotAutoRedactionNote:
+    'Sommige velden die deze site als privé heeft gemarkeerd, kunnen op ondersteunde pagina’s visueel worden gemaskeerd, maar niet-gemarkeerde gevoelige informatie kan nog steeds worden meegestuurd.',
   screenshotRequiredNote: '📸 Een schermafbeelding is vereist voordat u kunt versturen.',
   includeScreenshotLabel: '📸 Schermafbeelding toevoegen',
   sendConsoleLogsLabel: 'Consolelogboeken meesturen',
@@ -73,6 +75,10 @@ export const nl: WidgetStrings = {
   // Screenshot options
   captureScreenshotTitle: 'Schermafbeelding maken',
   chooseWhatToCapture: 'Kies wat u wilt vastleggen:',
+  viewportRedactionWarning:
+    'Bij het vastleggen van het zichtbare deel via de browser kunnen privévelden niet automatisch worden gemaskeerd. Kies “Element selecteren” om automatische maskering te behouden, of controleer en dek gevoelige gebieden af voordat u verstuurt.',
+  redactionReviewNote:
+    'Deze site heeft enkele velden gemarkeerd voor redactie. Controleer de schermafbeelding voordat u verstuurt.',
   pageTooComplexViewportNote:
     'Deze pagina is te complex om volledig of per gebied vast te leggen. Leg het zichtbare deel vast of selecteer een specifiek element.',
   pageTooComplexElementNote:
@@ -84,6 +90,8 @@ export const nl: WidgetStrings = {
   skipScreenshot: 'Schermafbeelding overslaan',
   // Element & area pickers
   areaPickerInstruction: 'Trek een selectie rond het gebied dat u wilt vastleggen',
+  areaPickerRedactionInstruction:
+    'Trek een selectie rond het gebied dat u wilt vastleggen. Gemarkeerde privévelden kunnen worden gemaskeerd als ze binnen de selectie vallen.',
   elementPickerInstruction: 'Klik op een element om het vast te leggen',
   elementPickerTouchInstruction: 'Tik op een element om het vast te leggen',
   escToCancel: 'ESC om te annuleren',
@@ -94,8 +102,20 @@ export const nl: WidgetStrings = {
   captureFailedMessage:
     'Kan geen schermafbeelding maken. De pagina is mogelijk te complex of de browser staat dit niet toe.',
   chooseAnotherMethod: 'Kies een andere methode',
+  maskFailureTitle: 'Privacymaskering mislukt',
+  maskFailureMessage:
+    'Automatische redactie van privévelden kon niet worden toegepast. Om uw gegevens te beschermen is deze schermafbeelding verwijderd. U kunt uw feedback nog steeds zonder schermafbeelding versturen.',
+  continueWithoutScreenshot: 'Doorgaan zonder schermafbeelding',
   // Annotation step
   reviewScreenshotTitle: 'Schermafbeelding controleren',
+  viewportRedactionUnavailableNote:
+    'Bij deze via de browser vastgelegde schermafbeelding konden privévelden niet automatisch worden gemaskeerd. Controleer en dek gevoelige gebieden af voordat u verstuurt.',
+  redactionCountNote: (count: number) =>
+    count === 1
+      ? '1 privé-item is gemarkeerd voor redactie in deze schermafbeelding. Controleer voordat u verstuurt.'
+      : `${count} privé-items zijn gemarkeerd voor redactie in deze schermafbeelding. Controleer voordat u verstuurt.`,
+  redactionLimitationsNote:
+    'BugDrop heeft alleen de gemeten gemarkeerde vakken afgedekt. Het inspecteert geen pixels binnen ingesloten of gerenderde inhoud zoals iframes, canvas, afbeeldingen, SVG’s, video’s, CSS-achtergronden of aangepaste elementen. Controleer of het zwarte vak het gevoelige gebied volledig bedekt voordat u verstuurt, of maak de afbeelding opnieuw nadat u een groter element hebt gemarkeerd.',
   annotationInstruction:
     'Controleer of er geen gevoelige informatie zichtbaar is voordat u verstuurt. Dek gevoelige gebieden af voordat u indient. Redacties worden permanent in de geüploade afbeelding verwerkt.',
   selectedElementNote: (linkHtml: string) =>

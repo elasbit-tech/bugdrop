@@ -1,5 +1,10 @@
-import { beginViewportCapture, canCaptureViewportNatively, isFullPageDisabled } from './screenshot';
-import { createModal } from './ui';
+import {
+  beginViewportCapture,
+  canCaptureViewportNatively,
+  getRedactionCount,
+  isFullPageDisabled,
+} from './screenshot';
+import { createModal, redactionNoteHtml } from './ui';
 import { escapeWidgetText, t } from './i18n';
 
 export type ScreenshotChoice =
@@ -17,6 +22,13 @@ export function showScreenshotOptions(
   const fullPageDisabled = isFullPageDisabled();
   const nativeViewportAvailable = fullPageDisabled && canCaptureViewportNatively();
   const allowSkip = opts?.allowSkip !== false;
+
+  let redactionNote = '';
+  if (nativeViewportAvailable) {
+    redactionNote = redactionNoteHtml(t().viewportRedactionWarning);
+  } else if (getRedactionCount() > 0) {
+    redactionNote = redactionNoteHtml(t().redactionReviewNote);
+  }
 
   return new Promise(resolve => {
     const complexNote = fullPageDisabled
@@ -36,6 +48,7 @@ export function showScreenshotOptions(
       `
         <p style="margin: 0 0 16px; color: var(--bd-text-secondary);">${escapeWidgetText(t().chooseWhatToCapture)}</p>
         ${complexNote}
+        ${redactionNote}
         <div class="bd-actions bd-screenshot-actions">
           ${primaryCaptureButton}
           ${fullPageDisabled ? '' : `<button class="bd-btn bd-btn-secondary" data-action="area">${escapeWidgetText(t().selectArea)}</button>`}

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { createAreaPicker } from './area-picker';
 import { showAnnotationStep } from './annotation-flow';
 import {
@@ -8,7 +9,7 @@ import {
 import { getElementContextCaptureTarget } from './element-context';
 import { createElementPicker } from './picker';
 import { getElementSelector, getFullElementSelector } from './selector-metadata';
-import { isFullPageDisabled } from './screenshot';
+import { getRedactionCount, isFullPageDisabled } from './screenshot';
 import { showScreenshotOptions, type ScreenshotChoice } from './screenshot-options';
 import { DEFAULT_SELECTED_ELEMENT_SCREENSHOT_PIXEL_RATIO } from '../defaults';
 import { abortableCapture } from './capture-cancellation';
@@ -51,6 +52,9 @@ type ChosenCaptureResult =
   | ({
       kind: 'captured';
       screenshot: string;
+      redactionCount: number;
+      redactionUnavailable: boolean;
+      redactionLimitations: boolean;
     } & ElementMetadata)
   | { kind: 'returnToForm' }
   | { kind: 'chooseAgain' }
@@ -112,9 +116,16 @@ async function runScreenshotCaptureFlowInternal(
       };
     }
 
-    const annotatedScreenshot = await showAnnotationStep(root, result.screenshot, {
-      ...(result.elementSelector ? { selectedElementCapture: true } : {}),
-    });
+    const annotatedScreenshot = await showAnnotationStep(
+      root,
+      result.screenshot,
+      result.redactionCount,
+      {
+        redactionUnavailable: result.redactionUnavailable,
+        ...(result.redactionLimitations ? { redactionLimitations: true } : {}),
+        ...(result.elementSelector ? { selectedElementCapture: true } : {}),
+      }
+    );
     if (signal?.aborted) return { ...emptyCaptureResult(), returnToForm: true };
 
     if (annotatedScreenshot === 'retake') continue;
@@ -210,6 +221,9 @@ async function captureFromViewportChoice(
     screenshot: result.dataUrl,
     elementSelector: null,
     fullElementSelector: null,
+    redactionCount: 0,
+    redactionUnavailable: true,
+    redactionLimitations: false,
   };
 }
 
@@ -233,6 +247,9 @@ async function captureFromFullPageChoice(
     screenshot: result.dataUrl,
     elementSelector: null,
     fullElementSelector: null,
+    redactionCount: result.redaction?.count ?? 0,
+    redactionUnavailable: false,
+    redactionLimitations: result.redaction?.hasLimitations ?? false,
   };
 }
 
@@ -276,6 +293,9 @@ async function captureFromElementChoice(
     kind: 'captured',
     screenshot: result.dataUrl,
     ...elementMetadata,
+    redactionCount: result.redaction?.count ?? 0,
+    redactionUnavailable: false,
+    redactionLimitations: result.redaction?.hasLimitations ?? false,
   };
 }
 
@@ -285,7 +305,13 @@ async function captureFromAreaChoice(
   screenshotRequired: boolean,
   signal?: AbortSignal
 ): Promise<ChosenCaptureResult> {
-  const rect = await createAreaPicker(getCapturePickerStyle(config), signal);
+  const rect = await createAreaPicker(
+    getCapturePickerStyle(config),
+    {
+      redactionsAvailable: getRedactionCount() > 0,
+    },
+    signal
+  );
   if (!rect) {
     return emptyChosenCaptureResult('selection-cancelled');
   }
@@ -304,6 +330,9 @@ async function captureFromAreaChoice(
     screenshot: result.dataUrl,
     elementSelector: null,
     fullElementSelector: null,
+    redactionCount: result.redaction?.count ?? 0,
+    redactionUnavailable: false,
+    redactionLimitations: result.redaction?.hasLimitations ?? false,
   };
 }
 

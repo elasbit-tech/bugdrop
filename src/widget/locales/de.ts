@@ -38,6 +38,8 @@ export const de: WidgetStrings = {
   descriptionPlaceholder: 'Geben Sie weitere Details, Schritte zur Reproduktion oder Kontext an...',
   screenshotAutoNote:
     'Diese Website hängt beim Absenden automatisch einen Screenshot der gesamten Seite an, ohne eine Vorschau anzuzeigen. Überprüfen Sie Ihre Seite vor dem Senden auf sensible Informationen.',
+  screenshotAutoRedactionNote:
+    'Einige von dieser Website als privat markierte Felder können auf unterstützten Seiten optisch maskiert werden, nicht markierte sensible Informationen können jedoch weiterhin enthalten sein.',
   screenshotRequiredNote: '📸 Vor dem Absenden ist ein Screenshot erforderlich.',
   includeScreenshotLabel: '📸 Screenshot hinzufügen',
   sendConsoleLogsLabel: 'Konsolenprotokolle mitsenden',
@@ -75,6 +77,10 @@ export const de: WidgetStrings = {
   // Screenshot options
   captureScreenshotTitle: 'Screenshot erstellen',
   chooseWhatToCapture: 'Wählen Sie aus, was erfasst werden soll:',
+  viewportRedactionWarning:
+    'Bei der Erfassung des sichtbaren Bereichs über den Browser können private Felder nicht automatisch maskiert werden. Wählen Sie „Element auswählen“, um die automatische Maskierung beizubehalten, oder überprüfen und verdecken Sie sensible Bereiche vor dem Senden.',
+  redactionReviewNote:
+    'Diese Website hat einige Felder zur Schwärzung markiert. Überprüfen Sie den Screenshot vor dem Senden.',
   pageTooComplexViewportNote:
     'Diese Seite ist zu komplex für eine vollständige Erfassung oder eine Bereichserfassung. Erfassen Sie stattdessen den sichtbaren Bereich oder wählen Sie ein bestimmtes Element aus.',
   pageTooComplexElementNote:
@@ -86,6 +92,8 @@ export const de: WidgetStrings = {
   skipScreenshot: 'Screenshot überspringen',
   // Element & area pickers
   areaPickerInstruction: 'Ziehen Sie eine Auswahl um den zu erfassenden Bereich',
+  areaPickerRedactionInstruction:
+    'Ziehen Sie eine Auswahl um den zu erfassenden Bereich. Markierte private Felder können maskiert werden, wenn sie darin enthalten sind.',
   elementPickerInstruction: 'Klicken Sie auf ein beliebiges Element, um es zu erfassen',
   elementPickerTouchInstruction: 'Tippen Sie auf ein beliebiges Element, um es zu erfassen',
   escToCancel: 'ESC zum Abbrechen',
@@ -96,8 +104,20 @@ export const de: WidgetStrings = {
   captureFailedMessage:
     'Der Screenshot konnte nicht erfasst werden. Die Seite ist möglicherweise zu komplex, oder Browsereinschränkungen greifen.',
   chooseAnotherMethod: 'Andere Methode wählen',
+  maskFailureTitle: 'Datenschutz-Maskierung fehlgeschlagen',
+  maskFailureMessage:
+    'Die automatische Schwärzung privater Felder konnte nicht angewendet werden. Zum Schutz Ihrer Daten wurde dieser Screenshot verworfen. Sie können Ihr Feedback weiterhin ohne Screenshot senden.',
+  continueWithoutScreenshot: 'Ohne Screenshot fortfahren',
   // Annotation step
   reviewScreenshotTitle: 'Screenshot überprüfen',
+  viewportRedactionUnavailableNote:
+    'Bei diesem über den Browser erfassten sichtbaren Bereich konnten private Felder nicht automatisch maskiert werden. Überprüfen und verdecken Sie sensible Bereiche vor dem Senden.',
+  redactionCountNote: (count: number) =>
+    count === 1
+      ? `${count} privates Element wurde zur Schwärzung in diesem Screenshot markiert. Überprüfen Sie ihn vor dem Senden.`
+      : `${count} private Elemente wurden zur Schwärzung in diesem Screenshot markiert. Überprüfen Sie ihn vor dem Senden.`,
+  redactionLimitationsNote:
+    'BugDrop hat nur die gemessenen markierten Bereiche abgedeckt. Es untersucht keine Pixel innerhalb eingebetteter oder gerenderter Inhalte wie iFrames, Canvas, Bildern, SVGs, Videos, CSS-Hintergründen oder benutzerdefinierten Steuerelementen. Stellen Sie vor dem Senden sicher, dass das schwarze Feld den sensiblen Bereich vollständig abdeckt, oder nehmen Sie den Screenshot nach Markierung eines größeren Bereichs erneut auf.',
   annotationInstruction:
     'Stellen Sie vor dem Senden sicher, dass keine sensiblen Informationen sichtbar sind. Verdecken Sie sensible Bereiche vor dem Absenden. Schwärzungen werden dauerhaft in das hochgeladene Bild eingebettet.',
   selectedElementNote: (linkHtml: string) =>

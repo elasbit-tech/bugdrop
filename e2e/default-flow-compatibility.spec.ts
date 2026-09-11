@@ -345,7 +345,7 @@ test.describe('paired default-flow screenshot compatibility oracle', () => {
     });
   });
 
-  test('viewport capture shows no redaction banner and submits empty selector metadata', async ({
+  test('viewport capture exposes privacy limits and submits empty selector metadata', async ({
     browser,
   }) => {
     const result = await expectPairedJourney(
@@ -354,17 +354,21 @@ test.describe('paired default-flow screenshot compatibility oracle', () => {
         await page.goto('/test/complex-dom.html?nodes=12000&private=redacted#secret');
         await waitForWidget(page);
         await openFromPublicApi(page, trace);
-        await fillBaseForm(page, 'Viewport capture proof');
+        await fillBaseForm(page, 'Viewport privacy proof');
         await act(page, trace, 'continue-to-capture', '#submit-btn');
 
         const widget = host(page);
         await expect(widget.locator('css=[data-action="viewport"]')).toBeVisible();
-        await expect(widget.locator('css=.bd-redaction-note')).not.toBeAttached();
-        await observe(page, trace, 'viewport-options');
+        await expect(widget.locator('css=.bd-redaction-note')).toContainText(
+          'cannot apply automatic private-field masks'
+        );
+        await observe(page, trace, 'viewport-options-with-privacy-notice');
         await act(page, trace, 'capture-viewport', '[data-action="viewport"]');
         await expect(widget.locator('css=#annotation-canvas')).toBeVisible({ timeout: 10000 });
-        await expect(widget.locator('css=.bd-redaction-note')).not.toBeAttached();
-        await observe(page, trace, 'viewport-annotation');
+        await expect(widget.locator('css=.bd-redaction-note')).toContainText(
+          'could not apply automatic private-field masks'
+        );
+        await observe(page, trace, 'viewport-annotation-with-privacy-notice');
         await act(page, trace, 'submit-viewport', '[data-action="done"]');
         await expect(widget.locator('css=.bd-success-icon')).toBeVisible({ timeout: 10000 });
         expect(requests).toHaveLength(1);
@@ -387,7 +391,7 @@ test.describe('paired default-flow screenshot compatibility oracle', () => {
     });
   });
 
-  test('area capture shows no redaction banner and annotation Undo restores its baseline', async ({
+  test('area capture reports redaction and annotation Undo restores its baseline', async ({
     browser,
   }) => {
     const result = await expectPairedJourney(
@@ -399,11 +403,13 @@ test.describe('paired default-flow screenshot compatibility oracle', () => {
         await openFromPublicApi(page, trace);
         await fillBaseForm(page, 'Area redaction and undo');
         await act(page, trace, 'continue-to-capture', '#submit-btn');
-        await expect(host(page).locator('css=.bd-redaction-note')).not.toBeAttached();
+        await expect(host(page).locator('css=.bd-redaction-note')).toContainText(
+          'marked some fields for redaction'
+        );
         await act(page, trace, 'select-area', '[data-action="area"]');
         await expect(page.locator('#bugdrop-area-picker-overlay')).toBeVisible();
         await expect(page.locator('#bugdrop-area-picker-tooltip')).toContainText(
-          'Draw a selection around the area to capture'
+          'Marked private fields may be masked if included'
         );
 
         const box = await page.locator('#redacted-test-input').boundingBox();
@@ -416,7 +422,9 @@ test.describe('paired default-flow screenshot compatibility oracle', () => {
 
         const canvas = host(page).locator('css=#annotation-canvas canvas');
         await expect(canvas).toBeVisible({ timeout: 10000 });
-        await expect(host(page).locator('css=.bd-redaction-note')).not.toBeAttached();
+        await expect(host(page).locator('css=.bd-redaction-note')).toContainText(
+          '1 private item was marked for redaction'
+        );
         const baseline = await canvas.evaluate(element =>
           (element as HTMLCanvasElement).toDataURL()
         );

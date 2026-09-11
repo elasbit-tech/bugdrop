@@ -1,4 +1,4 @@
-import { getDomNodeCount, isFullPageDisabled } from './screenshot';
+import { getDomNodeCount, getRedactionCount, isFullPageDisabled } from './screenshot';
 import { runScreenshotCaptureFlow } from './capture-flow';
 import { injectStyles, createModal, showSuccessModal, type IssueLinkVisibility } from './ui';
 import {
@@ -1705,9 +1705,11 @@ function getScreenshotFormControl(
   initialValues?: FeedbackFormResult | null
 ): string {
   if (config.screenshotMode === 'auto') {
+    const redactionNote =
+      getRedactionCount() > 0 ? ` ${escapeWidgetText(t().screenshotAutoRedactionNote)}` : '';
     return `
       <p style="margin: 8px 0 0; color: var(--bd-text-secondary); font-size: 0.95rem;">
-        ${escapeWidgetText(t().screenshotAutoNote)}
+        ${escapeWidgetText(t().screenshotAutoNote)}${redactionNote}
       </p>
     `;
   }

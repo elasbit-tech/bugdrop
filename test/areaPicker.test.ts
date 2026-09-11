@@ -12,7 +12,7 @@ function pointer(type: string, x: number, y: number, pointerId = 1, isPrimary = 
   return event;
 }
 
-async function startPicker(options?: { coarse?: boolean }) {
+async function startPicker(options?: { coarse?: boolean; redactionsAvailable?: boolean }) {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     value: vi.fn(
@@ -22,7 +22,9 @@ async function startPicker(options?: { coarse?: boolean }) {
         }) as MediaQueryList
     ),
   });
-  const result = createAreaPicker();
+  const result = createAreaPicker(undefined, {
+    redactionsAvailable: options?.redactionsAvailable,
+  });
   await vi.advanceTimersByTimeAsync(50);
   return { result };
 }
@@ -67,13 +69,13 @@ describe('createAreaPicker', () => {
     expect(document.querySelector('#bugdrop-area-picker-overlay')).toBeNull();
   });
 
-  it('shows coarse-pointer cancellation with the plain capture instruction', async () => {
-    const { result } = await startPicker({ coarse: true });
+  it('shows coarse-pointer cancellation with redaction-aware guidance', async () => {
+    const { result } = await startPicker({ coarse: true, redactionsAvailable: true });
     const cancel = document.querySelector<HTMLButtonElement>('#bugdrop-area-picker-cancel');
     expect(cancel).not.toBeNull();
-    const tooltip = document.querySelector('#bugdrop-area-picker-tooltip')?.textContent;
-    expect(tooltip).toContain('Draw a selection around the area to capture');
-    expect(tooltip).not.toContain('masked');
+    expect(document.querySelector('#bugdrop-area-picker-tooltip')?.textContent).toContain(
+      'Marked private fields may be masked if included'
+    );
 
     cancel!.click();
     expect(await result).toBeNull();
