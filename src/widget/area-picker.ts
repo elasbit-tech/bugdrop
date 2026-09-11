@@ -7,13 +7,12 @@ type ResolvedAreaPickerStyle = ReturnType<typeof resolvePickerStyle>;
 
 export function createAreaPicker(
   style?: PickerStyle,
-  opts?: { redactionsAvailable?: boolean },
   signal?: AbortSignal
 ): Promise<DOMRect | null> {
   return new Promise(resolve => {
     setTimeout(() => {
       if (signal?.aborted) resolve(null);
-      else startAreaPicker(resolve, style, opts, signal);
+      else startAreaPicker(resolve, style, signal);
     }, 50);
   });
 }
@@ -21,7 +20,6 @@ export function createAreaPicker(
 function startAreaPicker(
   resolve: (rect: DOMRect | null) => void,
   style?: PickerStyle,
-  opts?: { redactionsAvailable?: boolean },
   signal?: AbortSignal
 ): void {
   const { accent, fontFamily, radius, bw, tooltipBg, tooltipText, tooltipBorder } =
@@ -33,9 +31,7 @@ function startAreaPicker(
   const selectionBorder = createSelectionBorder({ accent, bw, radius });
   document.body.appendChild(selectionBorder);
 
-  const instruction = opts?.redactionsAvailable
-    ? t().areaPickerRedactionInstruction
-    : t().areaPickerInstruction;
+  const instruction = t().areaPickerInstruction;
   const showInlineCancel = usesCoarsePointer();
   const tooltip = createTooltip(
     { accent, fontFamily, radius, bw, tooltipBg, tooltipText, tooltipBorder },

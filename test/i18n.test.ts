@@ -127,12 +127,6 @@ describe('locale dictionaries', () => {
     expect(de.rateLimited(1)).toContain('1 Minute ');
     expect(de.rateLimited(2)).toContain('2 Minuten ');
 
-    expect(de.redactionCountNote(1)).toContain('1 privates Element');
-    expect(de.redactionCountNote(2)).toContain('2 private Elemente');
-
-    expect(nl.redactionCountNote(1)).toContain('1 privé-item');
-    expect(nl.redactionCountNote(2)).toContain('2 privé-items');
-
     expect(pl.rateLimited(1)).toContain('1 minutę');
     expect(pl.rateLimited(2)).toContain('2 minuty');
     expect(pl.rateLimited(5)).toContain('5 minut');

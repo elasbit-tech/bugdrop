@@ -1,32 +1,13 @@
 import { createAnnotator, type Tool } from './annotator';
-import { createModal, redactionNoteHtml } from './ui';
+import { createModal } from './ui';
 import { escapeWidgetText, t } from './i18n';
 
 export function showAnnotationStep(
   root: HTMLElement,
   screenshot: string,
-  redactionCount = 0,
-  opts?: {
-    redactionUnavailable?: boolean;
-    redactionLimitations?: boolean;
-    selectedElementCapture?: boolean;
-  }
+  opts?: { selectedElementCapture?: boolean }
 ): Promise<string | 'retake' | 'cancel'> {
   return new Promise(resolve => {
-    const redactionMessages: string[] = [];
-    if (opts?.redactionUnavailable) {
-      redactionMessages.push(t().viewportRedactionUnavailableNote);
-    } else {
-      if (redactionCount > 0) {
-        redactionMessages.push(t().redactionCountNote(redactionCount));
-      }
-      if (opts?.redactionLimitations) {
-        redactionMessages.push(t().redactionLimitationsNote);
-      }
-    }
-    const redactionNote = redactionMessages.length
-      ? redactionNoteHtml(redactionMessages.join(' '))
-      : '';
     const configLinkHtml =
       '<a href="https://bugdrop.dev/docs/configuration#select-element-screenshots" target="_blank" rel="noopener noreferrer">data-element-context-max-area</a>';
     const selectedElementNote = opts?.selectedElementCapture
@@ -40,7 +21,6 @@ export function showAnnotationStep(
       root,
       t().reviewScreenshotTitle,
       `
-        ${redactionNote}
         <p style="margin: 0 0 12px; color: var(--bd-text-secondary); font-size: 13px;">
           ${escapeWidgetText(t().annotationInstruction)}
         </p>
