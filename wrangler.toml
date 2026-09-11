@@ -17,7 +17,7 @@ crons = ["17 3 * * *"]
 # Static assets directory (for widget.js)
 [assets]
 directory = "public"
-Bbinding = "ASSETS"
+binding = "ASSETS"
 
 # Environment variables
 [vars]
@@ -62,7 +62,7 @@ name = "bugdrop-preview"
 workers_dev = true
 routes = []
 
-[Benv.preview.vars]
+[env.preview.vars]
 # Optional exact repository allowlist (unset allows all installed repositories).
 # ALLOWED_REPOSITORIES = "example-org/app,example-org/feedback"
 ENVIRONMENT = "preview"
