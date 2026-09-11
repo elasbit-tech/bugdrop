@@ -418,7 +418,23 @@ Control how screenshots are collected during the feedback flow.
 - **`auto`** -- Automatically captures a full-page screenshot after the form is submitted, without showing the manual screenshot picker or redaction step.
 - **`required`** -- Requires a screenshot before submission. Users can choose full page, element, or area, then annotate or redact before submitting.
 
-Manual redaction is controlled by the person submitting feedback. Use developer-configured masking for fields that should be visually covered in supported screenshot modes, especially with automatic screenshots. Auto mode warns users that a full-page screenshot will be attached, but it does not show the manual picker or annotation review step.
+Redaction is manual and controlled by the person submitting feedback: the screenshot review step has a **Redact** tool that paints opaque black rectangles into the uploaded image, and **Undo** removes them. BugDrop does not mask any element automatically; the `data-bugdrop-mask` family of attributes is ignored. Auto mode warns users that a full-page screenshot will be attached, but it does not show the manual picker or annotation review step.
+
+```html
+<!-- Automatically attach a full-page screenshot -->
+<script
+  src="https://bugdrop.neonwatty.workers.dev/widget.js"
+  data-repo="owner/repo"
+  data-screenshot="auto"
+></script>
+
+<!-- Require a screenshot before submitting feedback -->
+<script
+  src="https://bugdrop.neonwatty.workers.dev/widget.js"
+  data-repo="owner/repo"
+  data-screenshot="required"
+></script>
+```
 
 BugDrop preserves screenshots at their captured resolution when they fit the Worker's upload limit. The widget learns that limit during its installation check and attempts to scale larger captured or annotated PNGs down before submission. Self-hosted Workers use `MAX_SCREENSHOT_SIZE_MB` to set the limit; it defaults to 5 MB.
 
@@ -452,61 +468,6 @@ The amount of surrounding context is controlled by one attribute:
 Select Element captures are capped at 1x pixel ratio even when `data-screenshot-scale` is higher. This keeps context screenshots small enough for practical issue uploads.
 
 The screenshot review step also links to this configuration section when a Select Element screenshot is being reviewed, so teams can discover the context setting during testing.
-
-### Developer-configured screenshot masking
-
-BugDrop can visually mask fields that your app marks as private before a screenshot is uploaded:
-
-```html
-<input data-bugdrop-redact value="sk_live_..." />
-<section data-bugdrop-mask>Private account details</section>
-```
-
-Supported attributes:
-
-- `data-bugdrop-redact`
-- `data-bd-redact`
-- `data-bugdrop-redacted`
-- `data-bugdrop-mask`
-
-This is visual masking, not a data-loss-prevention or security boundary.
-BugDrop can only mask content it can measure in the page DOM. Unmarked
-sensitive information can still appear, and browser rendering limits can apply
-to canvas, image, video, iframe, SVG, shadow DOM, pseudo-element, and highly
-custom control content.
-
-Masking works in full-page, selected-element, selected-area, and automatic
-screenshot modes when BugDrop renders the page through its DOM screenshot path.
-For selected-area captures, mask rectangles are translated into the selected
-crop. For selected-element captures with surrounding context enabled, masks are
-computed relative to the captured context element.
-
-| Capture path | Automatic DOM masks | User preview | Manual redact tool | Limitation warning | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Full page | Yes | Yes | Yes | Yes | Uses DOM screenshot rendering unless the page is too complex |
-| Selected element | Yes | Yes | Yes | Yes | Masks are relative to the captured element or surrounding context |
-| Selected area | Yes | Yes | Yes | Yes, scoped to the crop | Masks outside the selected crop are ignored |
-| Automatic screenshot | Yes | No | No | No in the current UI | Use only when marked sensitive regions are stable and supported |
-| Native viewport fallback | No | Yes | Yes | Existing unavailable-mask warning | Used for very complex pages; users must review manually |
-
-Disable screenshots or use `data-screenshot="optional"` on pages where sensitive
-pixels cannot be reliably enclosed by DOM boxes.
-
-```html
-<!-- Automatically attach a full-page screenshot -->
-<script
-  src="https://bugdrop.neonwatty.workers.dev/widget.js"
-  data-repo="owner/repo"
-  data-screenshot="auto"
-></script>
-
-<!-- Require a screenshot before submitting feedback -->
-<script
-  src="https://bugdrop.neonwatty.workers.dev/widget.js"
-  data-repo="owner/repo"
-  data-screenshot="required"
-></script>
-```
 
 ## Custom Icon and Label
 

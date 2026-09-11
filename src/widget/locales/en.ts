@@ -36,8 +36,6 @@ export const en: WidgetStrings = {
   descriptionPlaceholder: 'Provide additional details, steps to reproduce, or context...',
   screenshotAutoNote:
     'This site will attach a full-page screenshot when you submit without showing a preview. Review your page for sensitive information before sending.',
-  screenshotAutoRedactionNote:
-    'Some fields this site marked private may be visually masked on supported pages, but unmarked sensitive information can still be included.',
   screenshotRequiredNote: '📸 A screenshot is required before submitting.',
   includeScreenshotLabel: '📸 Include a screenshot',
   sendConsoleLogsLabel: 'Send Console Logs',
@@ -72,10 +70,6 @@ export const en: WidgetStrings = {
   // Screenshot options
   captureScreenshotTitle: 'Capture Screenshot',
   chooseWhatToCapture: 'Choose what to capture:',
-  viewportRedactionWarning:
-    'Browser viewport capture cannot apply automatic private-field masks. Select Element to preserve automatic masking, or review and cover sensitive areas before sending.',
-  redactionReviewNote:
-    'This site marked some fields for redaction. Review the screenshot before sending.',
   pageTooComplexViewportNote:
     'This page is too complex for full-page or area capture. Capture the visible viewport or select a specific element instead.',
   pageTooComplexElementNote:
@@ -87,8 +81,6 @@ export const en: WidgetStrings = {
   skipScreenshot: 'Skip Screenshot',
   // Element & area pickers
   areaPickerInstruction: 'Draw a selection around the area to capture',
-  areaPickerRedactionInstruction:
-    'Draw a selection around the area to capture. Marked private fields may be masked if included.',
   elementPickerInstruction: 'Click any element to capture it',
   elementPickerTouchInstruction: 'Tap any element to capture it',
   escToCancel: 'ESC to cancel',
@@ -99,18 +91,8 @@ export const en: WidgetStrings = {
   captureFailedMessage:
     'Failed to capture screenshot. The page may be too complex or browser restrictions may apply.',
   chooseAnotherMethod: 'Choose Another Method',
-  maskFailureTitle: 'Privacy masking failed',
-  maskFailureMessage:
-    'Automatic redaction of private fields could not be applied. To protect your data, this screenshot was discarded. You can still submit feedback without one.',
-  continueWithoutScreenshot: 'Continue without screenshot',
   // Annotation step
   reviewScreenshotTitle: 'Review Screenshot',
-  viewportRedactionUnavailableNote:
-    'This browser viewport capture could not apply automatic private-field masks. Review and cover any sensitive areas before sending.',
-  redactionCountNote: (count: number) =>
-    `${count} private ${count === 1 ? 'item was' : 'items were'} marked for redaction in this screenshot. Review before sending.`,
-  redactionLimitationsNote:
-    'BugDrop only covered the measured marked boxes. It does not inspect pixels inside embedded or rendered content such as iframes, canvas, images, SVGs, videos, CSS backgrounds, or custom controls. Confirm the black box fully covers the sensitive region before sending, or retake after marking a larger wrapper.',
   annotationInstruction:
     'Check that no sensitive information is visible before sending. Cover sensitive areas before submitting. Redactions are baked into the uploaded image.',
   selectedElementNote: (linkHtml: string) =>

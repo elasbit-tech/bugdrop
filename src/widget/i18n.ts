@@ -38,7 +38,6 @@ export interface WidgetStrings {
   descriptionLabel: string;
   descriptionPlaceholder: string;
   screenshotAutoNote: string;
-  screenshotAutoRedactionNote: string;
   screenshotRequiredNote: string;
   includeScreenshotLabel: string;
   sendConsoleLogsLabel: string;
@@ -73,8 +72,6 @@ export interface WidgetStrings {
   // Screenshot options
   captureScreenshotTitle: string;
   chooseWhatToCapture: string;
-  viewportRedactionWarning: string;
-  redactionReviewNote: string;
   pageTooComplexViewportNote: string;
   pageTooComplexElementNote: string;
   fullPage: string;
@@ -84,7 +81,6 @@ export interface WidgetStrings {
   skipScreenshot: string;
   // Element & area pickers
   areaPickerInstruction: string;
-  areaPickerRedactionInstruction: string;
   elementPickerInstruction: string;
   elementPickerTouchInstruction: string;
   escToCancel: string;
@@ -94,14 +90,8 @@ export interface WidgetStrings {
   captureFailedTitle: string;
   captureFailedMessage: string;
   chooseAnotherMethod: string;
-  maskFailureTitle: string;
-  maskFailureMessage: string;
-  continueWithoutScreenshot: string;
   // Annotation step
   reviewScreenshotTitle: string;
-  viewportRedactionUnavailableNote: string;
-  redactionCountNote: (count: number) => string;
-  redactionLimitationsNote: string;
   annotationInstruction: string;
   // Callers pass a trusted configuration-link HTML fragment; dictionaries own surrounding text only.
   selectedElementNote: (linkHtml: string) => string;
