@@ -48,7 +48,6 @@ preview_id = "ff8f3809037d4403befd09369a9f7e36"
 [[kv_namespaces]]
 binding = "INSTALLATION_ANALYTICS"
 id = "a567f723a2eb4cfab807b0c1d678dc76"
-B
 # Secrets (set with: wrangler secret put GITHUB_APP_ID)
 # GITHUB_APP_ID
 # GITHUB_PRIVATE_KEY
