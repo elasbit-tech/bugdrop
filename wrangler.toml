@@ -127,6 +127,8 @@ id = "e6454ed79f514ed3a9e24eea99dd6cd3"
 binding = "INSTALLATION_ANALYTICS"
 id = "a567f723a2eb4cfab807b0c1d678dc76"
 
+# Banco de pruebas del fork. Holver usa su propio backend en AWS
+# (packages/bug-report + API Gateway). Este Worker NO está en la ruta de producción.
 [env.elasbit-dev]
 name = "bugdrop-elasbit-dev"
 account_id = "364245d004d3816e2364937ee8c6ff4f"
