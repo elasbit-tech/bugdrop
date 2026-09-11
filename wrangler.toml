@@ -17,7 +17,7 @@ crons = ["17 3 * * *"]
 # Static assets directory (for widget.js)
 [assets]
 directory = "public"
-binding = "ASSETS"
+Bbinding = "ASSETS"
 
 # Environment variables
 [vars]
@@ -48,7 +48,7 @@ preview_id = "ff8f3809037d4403befd09369a9f7e36"
 [[kv_namespaces]]
 binding = "INSTALLATION_ANALYTICS"
 id = "a567f723a2eb4cfab807b0c1d678dc76"
-
+B
 # Secrets (set with: wrangler secret put GITHUB_APP_ID)
 # GITHUB_APP_ID
 # GITHUB_PRIVATE_KEY
@@ -63,7 +63,7 @@ name = "bugdrop-preview"
 workers_dev = true
 routes = []
 
-[env.preview.vars]
+[Benv.preview.vars]
 # Optional exact repository allowlist (unset allows all installed repositories).
 # ALLOWED_REPOSITORIES = "example-org/app,example-org/feedback"
 ENVIRONMENT = "preview"
@@ -78,7 +78,7 @@ bindings = [{ name = "FEEDBACK_COUNTER", class_name = "FeedbackCounter" }]
 
 [[env.preview.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "cdb88fa95d6348d6ab84037751853d5d"
+idB = "cdb88fa95d6348d6ab84037751853d5d"
 
 [[env.preview.kv_namespaces]]
 binding = "INSTALLATION_ANALYTICS"
@@ -127,3 +127,37 @@ id = "e6454ed79f514ed3a9e24eea99dd6cd3"
 [[env.production.kv_namespaces]]
 binding = "INSTALLATION_ANALYTICS"
 id = "a567f723a2eb4cfab807b0c1d678dc76"
+
+[env.elasbit-dev]
+name = "bugdrop-elasbit-dev"
+account_id = "364245d004d3816e2364937ee8c6ff4f"
+workers_dev = true
+preview_urls = false
+routes = []
+
+[env.elasbit-dev.vars]
+ENVIRONMENT = "production"
+ALLOWED_ORIGINS = "https://ae9b196631.dev.holver.ai"
+ALLOWED_REPOSITORIES = "elasbit-tech/holver"
+GITHUB_APP_NAME = "elasbit-bugdrop"
+ROOT_REDIRECT_URL = "https://elasbit.com"
+MAX_SCREENSHOT_SIZE_MB = "5"
+
+[[env.elasbit-dev.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "67beba7b584d48bebeaa29ba3af95474"
+preview_id = "a660a65ab66a471797096bfae7703b56"
+
+[env.elasbit-dev.durable_objects]
+bindings = [{ name = "FEEDBACK_COUNTER", class_name = "FeedbackCounter" }]
+
+[env.elasbit-dev.assets]
+directory = "public"
+binding = "ASSETS"
+
+[[env.elasbit-dev.kv_namespaces]]
+binding = "INSTALLATION_ANALYTICS"
+id = "1a7204fd095846d4b7412c9d1c8b6193"
+
+[env.elasbit-dev.triggers]
+crons = []
