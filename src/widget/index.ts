@@ -1,4 +1,5 @@
 import { getDomNodeCount, getRedactionCount, isFullPageDisabled } from './screenshot';
+import { setAutoMaskEnabled } from './mask';
 import { runScreenshotCaptureFlow } from './capture-flow';
 import { injectStyles, createModal, showSuccessModal, type IssueLinkVisibility } from './ui';
 import {
@@ -481,6 +482,12 @@ const config: WidgetConfig = {
   sendConsoleLogs: script?.dataset.sendConsoleLogs === 'true',
   locale,
 };
+
+const rawAutoMask = script?.dataset.autoMask;
+if (rawAutoMask !== undefined && rawAutoMask !== 'true' && rawAutoMask !== 'false') {
+  console.warn(`[BugDrop] Invalid data-auto-mask "${rawAutoMask}". Expected "true" or "false".`);
+}
+setAutoMaskEnabled(rawAutoMask !== 'false');
 
 setLocale(config.locale);
 

@@ -70,9 +70,28 @@ function createTarget(el: Element, reason: RedactionReason): RedactionTarget | n
   };
 }
 
+let autoMaskEnabled = true;
+
+/**
+ * Enable or disable automatic redaction (developer-marked elements and
+ * sensitive inputs). When disabled, every snapshot comes back empty, so
+ * callers report zero redactions, no banner renders, and applyMaskToImage
+ * returns the screenshot untouched. The manual Redact tool is unaffected.
+ */
+export function setAutoMaskEnabled(enabled: boolean): void {
+  autoMaskEnabled = enabled;
+}
+
+export function isAutoMaskEnabled(): boolean {
+  return autoMaskEnabled;
+}
+
 export function createRedactionSnapshot(root: Element): RedactionSnapshot {
   const targets: RedactionTarget[] = [];
   const unsupportedSurfaces: UnsupportedRedactionSurface[] = [];
+  if (!autoMaskEnabled) {
+    return { targets, unsupportedSurfaces, redactionCount: 0 };
+  }
   if (isBugDropOwnedNode(root)) {
     return { targets, unsupportedSurfaces, redactionCount: 0 };
   }

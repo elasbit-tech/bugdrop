@@ -5,6 +5,8 @@ import {
   collectMaskRects,
   createRedactionPlan,
   createRedactionSnapshot,
+  isAutoMaskEnabled,
+  setAutoMaskEnabled,
   MaskApplicationError,
   summarizeRedactionSnapshot,
   translateMaskRect,
@@ -645,5 +647,57 @@ describe('applyMaskToImage', () => {
     await expect(
       applyMaskToImage('data:image/png;base64,bad', [{ x: 0, y: 0, w: 10, h: 10 }], 1)
     ).rejects.toThrow(MaskApplicationError);
+  });
+});
+
+describe('automatic redaction opt-out', () => {
+  afterEach(() => {
+    setAutoMaskEnabled(true);
+    document.body.innerHTML = '';
+  });
+
+  function markedTree(): HTMLElement {
+    document.body.innerHTML = `
+      <div id="root">
+        <div data-bugdrop-mask id="panel">secret</div>
+        <input type="password" id="pw" />
+      </div>`;
+    const root = document.getElementById('root') as HTMLElement;
+    for (const el of [root, document.getElementById('panel'), document.getElementById('pw')]) {
+      (el as HTMLElement).getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 100, height: 20 }) as DOMRect;
+    }
+    return root;
+  }
+
+  it('is enabled by default and still collects marked elements', () => {
+    expect(isAutoMaskEnabled()).toBe(true);
+    expect(createRedactionSnapshot(markedTree()).redactionCount).toBeGreaterThan(0);
+  });
+
+  it('returns an empty snapshot when disabled', () => {
+    const root = markedTree();
+    setAutoMaskEnabled(false);
+    const snapshot = createRedactionSnapshot(root);
+    expect(snapshot.redactionCount).toBe(0);
+    expect(snapshot.targets).toEqual([]);
+    expect(snapshot.unsupportedSurfaces).toEqual([]);
+    expect(collectMaskRects(root)).toEqual([]);
+    expect(summarizeRedactionSnapshot(snapshot)).toEqual({ count: 0, hasLimitations: false });
+  });
+
+  it('leaves the screenshot untouched when disabled', async () => {
+    const root = markedTree();
+    setAutoMaskEnabled(false);
+    const dataUrl = 'data:image/png;base64,original';
+    expect(await applyMaskToImage(dataUrl, collectMaskRects(root), 1)).toBe(dataUrl);
+  });
+
+  it('restores automatic redaction when re-enabled', () => {
+    const root = markedTree();
+    setAutoMaskEnabled(false);
+    expect(createRedactionSnapshot(root).redactionCount).toBe(0);
+    setAutoMaskEnabled(true);
+    expect(createRedactionSnapshot(root).redactionCount).toBeGreaterThan(0);
   });
 });
